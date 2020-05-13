@@ -1,0 +1,8 @@
+
+cmake-build-debug/
+
+.idea/
+
+# CMakeLists.txt
+
+cisc340_project4_cache.pdf
