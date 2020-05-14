@@ -42,6 +42,30 @@ int opcode(int instruction){
 }
 
 /*
+ cache_to_processor: reading data from the cache to the processor
+ processor_to_cache: writing data from the processor to the cache
+ memory_to_cache: reading data from the memory to the cache
+ cache_to_memory: evicting cache data by writing it to the memory
+ cache_to_nowhere: evicting cache data by throwing it away
+*/
+enum action_type {cache_to_processor, processor_to_cache, memory_to_cache, cache_to_memory, cache_to_nowhere};
+
+void print_action(int address, int size, enum action_type type) {
+    printf("transferring word [%i-%i] ", address, address + size - 1);
+    if (type == cache_to_processor) {
+        printf("from the cache to the processor\n");
+    } else if (type == processor_to_cache) {
+        printf("from the processor to the cache\n");
+    } else if (type == memory_to_cache) {
+        printf("from the memory to the cache\n");
+    } else if (type == cache_to_memory) {
+        printf("from the cache to the memory\n");
+    } else if (type == cache_to_nowhere) {
+        printf("from the cache to nowhere\n");
+    }
+}
+
+/*
 void printstate(statetype *stateptr){
 	int i;
 	printf("\n@@@\nstate:\n");
@@ -57,6 +81,28 @@ void printstate(statetype *stateptr){
 	printf("end state\n");
 }
 */
+
+/*
+The three sources of address references are instruction fetch, lw, and sw.
+
+Each memory address reference should be passed to the cache simulator. The cache simulator keeps
+track of what blocks are currently in the cache and what state they are in (e.g. dirty, valid, etc.). To
+service the address reference, the cache simulator may need to write back a dirty cache block to
+memory, then it may need to read a block into the cache from memory. After these possible steps, the
+cache simulator should return the data to the processor (for read accesses) or write the data to the cache
+(for write accesses). Each of these data transfers will be logged by calling the print_action function.
+ */
+/*
+  The cache simulator keeps track of what blocks are currently in the cache and what state they are in (e.g. dirty, valid, etc.).
+*/
+int cache(int block_size_in_words, int number_of_sets, int associativity){
+    // Holds valid, tag, and data
+    // And which is LRU
+
+    // the total number of words in the cache
+    int size = block_size_in_words * number_of_sets * associativity;
+    return 1;
+}
 
 int signextend(int num){
 	// convert a 16-bit number into a 32-bit integer
@@ -203,15 +249,15 @@ int main(int argc, char** argv){
     }
 
     /*
-    Enter the machine code program to simulate:
-    - file_name
-    Enter the block size of the cache (in words):
-    - block_size_in_words
-    Enter the number of sets in the cache:
-    - number_of_sets
-    Enter the associativity of the cache:
-    - associativity
-     */
+     Enter the machine code program to simulate:
+     - file_name
+     Enter the block size of the cache (in words):
+     - block_size_in_words
+     Enter the number of sets in the cache:
+     - number_of_sets
+     Enter the associativity of the cache:
+     - associativity
+    */
 
     while(strlen(file_name) == 0){
         printf("Enter the name of the machine code file to simulate:\n");
