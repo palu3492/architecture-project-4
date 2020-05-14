@@ -231,27 +231,7 @@ int main(int argc, char** argv){
         scanf("%d",&associativity);
     }
 
-    printf("Inputs: %s, %d, %d, %d\n", file_name, block_size_in_words, number_of_sets, associativity);
-
-    /*
-	if(argc == 1){
-		file_name = (char*)malloc(sizeof(char)*100);
-		printf("Enter the name of the machine code file to simulate: ");
-		fgets(file_name, 100, stdin);
-		file_name[strlen(file_name)-1] = '\0'; // gobble up the \n with a \0
-	}
-	else if (argc == 2){
-
-		int strsize = strlen(argv[1]);
-
-		file_name = (char*)malloc(strsize);
-		file_name[0] = '\0';
-
-		strcat(file_name, argv[1]);
-	}else{
-		printf("Please run this program correctly\n");
-		exit(-1);
-	}
+    // printf("Inputs: %s, %d, %d, %d\n", file_name, block_size_in_words, number_of_sets, associativity);
 
 	FILE *fp = fopen(file_name, "r");
 	if (fp == NULL) {
@@ -281,6 +261,7 @@ int main(int argc, char** argv){
 	char line[256];
 
 	int i = 0;
+
 	while (fgets(line, sizeof(line), fp)) {
 		//note that fgets doesn't strip the terminating \n, checking its
         // presence would allow to handle lines longer that sizeof(line)
@@ -290,9 +271,8 @@ int main(int argc, char** argv){
 	fclose(fp);
 
 	// Run the simulation
-	run(state);
+	// run(state);
 
 	free(state);
 	free(file_name);
-    */
 }
