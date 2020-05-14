@@ -173,13 +173,13 @@ int find_way(int address, int set, int tag, cachetype* cache){
 
 int cache_load_block(cachetype* cache, statetype* state, int offset, int set, int tag, int address){
     int way = find_way(address, set, tag, cache);
+    int start_of_block = (address / cache->block_size_in_words) * cache->block_size_in_words; // integer division
     if(cache->sets[set]->ways[way]->dirty){
         // write to memory first
-        print_action(address, cache->block_size_in_words, cache_to_memory);
+        print_action(start_of_block, cache->block_size_in_words, cache_to_memory);
     }
     if(cache->sets[set]->ways[way]->tag != tag){
-        print_action(address, cache->block_size_in_words, memory_to_cache);
-        int start_of_block = (address / cache->block_size_in_words) * cache->block_size_in_words; // integer division
+        print_action(start_of_block, cache->block_size_in_words, memory_to_cache);
         memcpy(cache->sets[set]->ways[way]->data, state->mem + start_of_block, cache->block_size_in_words * sizeof(int));
     }
     cache->sets[set]->ways[way]->tag = tag;
