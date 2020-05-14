@@ -126,21 +126,21 @@ typedef struct cachestruct {
     settype** sets;
 } cachetype;
 
-unsigned int getOffset(unsigned int address, cachetype* cache){
+unsigned int get_offset(unsigned int address, cachetype* cache){
     unsigned int offset;
     offset = address << (cache->number_of_set_bits + cache->number_of_tag_bits);
     offset = offset >> (cache->number_of_set_bits + cache->number_of_tag_bits);
     return offset;
 }
 
-unsigned int getSet(unsigned int address, cachetype* cache){
+unsigned int get_set(unsigned int address, cachetype* cache){
     unsigned int set;
     set = address << (cache->number_of_tag_bits);
     set = set >> (cache->number_of_offset_bits + cache->number_of_tag_bits);
     return set;
 }
 
-unsigned int getTag(unsigned int address, cachetype* cache){
+unsigned int get_tag(unsigned int address, cachetype* cache){
     unsigned int tag;
     tag = address >> (cache->number_of_offset_bits + cache->number_of_set_bits);
     return tag;
@@ -171,7 +171,7 @@ int find_way(int address, int set, int tag, cachetype* cache){
     return cache->sets[set]->lru;
 }
 
-int cache_load(cachetype* cache, statetype* state, int offset, int set, int tag, int address){
+int cache_load_block(cachetype* cache, statetype* state, int offset, int set, int tag, int address){
     int way = find_way(address, set, tag, cache);
     if(cache->sets[set]->ways[way]->dirty){
         // write to memory first
@@ -179,7 +179,7 @@ int cache_load(cachetype* cache, statetype* state, int offset, int set, int tag,
     }
     if(cache->sets[set]->ways[way]->tag != tag){
         print_action(address, cache->block_size_in_words, memory_to_cache);
-        int start_of_block = address;
+        int start_of_block = (address / cache->block_size_in_words) * cache->block_size_in_words; // integer division
         memcpy(cache->sets[set]->ways[way]->data, state->mem + start_of_block, cache->block_size_in_words * sizeof(int));
     }
     cache->sets[set]->ways[way]->tag = tag;
@@ -190,62 +190,43 @@ int cache_load(cachetype* cache, statetype* state, int offset, int set, int tag,
     return cache->sets[set]->ways[way]->data[offset];
 }
 
-int cache_operation(cachetype* cache, statetype* state, int operation){
-    // operations types:
-    // 1 = fetch
-    // 2 = lw
-    // 3 = sw
+void cache_write_block(cachetype* cache, statetype* state, int offset, int set, int tag, int destination, int source){
+//    int way = find_way(address, set, tag, cache);
+//    if(cache->sets[set]->ways[way]->dirty){
+//        // write to memory first
+//        print_action(address, cache->block_size_in_words, cache_to_memory);
+//    }
+//    if(cache->sets[set]->ways[way]->tag != tag){
+//        print_action(address, cache->block_size_in_words, memory_to_cache);
+//        int start_of_block = (address / cache->block_size_in_words) * cache->block_size_in_words; // integer division
+//        memcpy(cache->sets[set]->ways[way]->data, state->mem + start_of_block, cache->block_size_in_words * sizeof(int));
+//    }
+//    cache->sets[set]->ways[way]->tag = tag;
+//    cache->sets[set]->ways[way]->valid = 1;
+//    cache->sets[set]->ways[way]->dirty = 0;
+//    print_action(address, 1, cache_to_processor);
 
-    unsigned int address = state->pc;
+}
 
-    int offset = getOffset(address, cache);
-    int set = getSet(address, cache);
-    int tag = getTag(address, cache);
+int cache_read(cachetype* cache, statetype* state, int address){
+    int offset = get_offset(address, cache);
+    int set = get_set(address, cache);
+    int tag = get_tag(address, cache);
 
+    return cache_load_block(cache, state, offset, set, tag, address);
+}
 
-    // FETCH
+// 1. memory already in cache
+// 2. memory not in cache
+    // 2.1 memory moved into free cache way
+    // 2.2 replace a cache way with this one
+        // if dirty then write
+void cache_write(cachetype* cache, statetype* state, int destination, int source){
+    int offset = get_offset(destination, cache);
+    int set = get_set(destination, cache);
+    int tag = get_tag(destination, cache);
 
-    // get instruction from memory
-    // how to:
-    // 1. memory in cache so read it and return it
-    // 2. get memory from cache then read it and return it
-        // - put in empty way
-        // - replace LRU way
-        // - replace LRU way and write to memory because of dirty bit
-    // Check if memory already in cache
-
-    // 1. memory already in cache
-    // 2. memory not in cache
-        // 2.1 memory moved into free cache way
-        // 2.2 replace a cache way with this one
-            // if dirty then write
-
-    if(operation == 1){
-        return cache_load(cache, state, offset, set, tag, address);
-    }
-
-    if(operation == 2){
-        return cache_load(cache, state, offset, set, tag, address);
-    }
-
-
-
-
-
-//    printf("address: %d\n", address);
-//    printf("Offset: %d, set: %d, tag: %d\n", cache->number_of_offset_bits, cache->number_of_set_bits, cache->number_of_tag_bits);
-    printf("address: %d, offset: %d, set: %d, tag: %d\n", address, offset, set, tag);
-
-
-
-    // still not found
-    // replace a way
-    // replace LRU
-    // write to memory if dirty
-
-
-
-    return 1;
+    cache_write_block(cache, state, offset, set, tag, destination, source);
 }
 
 int signextend(int num){
@@ -270,10 +251,10 @@ void run(statetype* state, cachetype* cache){
 	while(1){
 
 		// Fetch instruction from cache
-		instr = cache_operation(cache, state, 1);
+		instr = cache_read(cache, state, state->pc);
 
-		printf("instr: %d\n", instr);
-		printf("opcode: %d\n", opcode(instr));
+		// printf("instr: %d\n", instr);
+		// printf("opcode: %d\n", opcode(instr));
 
 		/* check for halt */
 		if (opcode(instr) == HALT) {
@@ -299,7 +280,6 @@ void run(statetype* state, cachetype* cache){
 		 * Action depends on instruction
 		 *
 		 **/
-        // Not sure we care about this anymore
 
 		// ADD
 		if(opcode(instr) == ADD){
@@ -321,10 +301,12 @@ void run(statetype* state, cachetype* cache){
 			aluresult = regB + offset;
 			if(opcode(instr) == LW){
 				// Load
-				state->reg[field0(instr)] = state->mem[aluresult];
+				int mem = cache_read(cache, state, aluresult);
+				state->reg[field0(instr)] = mem;
 			}else if(opcode(instr) == SW){
 				// Store
-				state->mem[aluresult] = regA;
+				// state->mem[aluresult] = regA;
+                cache_write(cache, state, aluresult, regA);
 			}
 		}
 		// JALR
