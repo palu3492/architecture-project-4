@@ -41,6 +41,7 @@ int opcode(int instruction){
 	return(instruction>>22);
 }
 
+/*
 void printstate(statetype *stateptr){
 	int i;
 	printf("\n@@@\nstate:\n");
@@ -55,6 +56,7 @@ void printstate(statetype *stateptr){
 	}
 	printf("end state\n");
 }
+*/
 
 int signextend(int num){
 	// convert a 16-bit number into a 32-bit integer
@@ -64,9 +66,11 @@ int signextend(int num){
 	return num;
 }
 
+/*
 void print_stats(int n_instrs){
 	printf("INSTRUCTIONS: %d\n", n_instrs);
 }
+*/
 
 void run(statetype* state){
 
@@ -84,7 +88,7 @@ void run(statetype* state){
 	while(1){
 		total_instrs++;
 
-		printstate(state);
+		// printstate(state);
 
 		// Instruction Fetch
 		instr = state->mem[state->pc];
@@ -158,40 +162,100 @@ void run(statetype* state){
 			}
 		}	
 	} // While
-	print_stats(total_instrs);
+	// print_stats(total_instrs);
 }
 
 int main(int argc, char** argv){
 
-	/** Get command line arguments **/
-	char* fname;
+    /** Get command line arguments **/
+    char* file_name = (char*)malloc(sizeof(char)*100);
+    int block_size_in_words = -1;
+    int number_of_sets = -1;
+    int associativity = -1;
 
+    int option;
+    opterr = 0;
+    // Iterate over the supplied command line options
+    // If -i or -o then store supplied file name
+    while ((option = getopt(argc, argv, "f:b:s:a:")) != -1) {
+        switch(option) {
+            case 'f':
+                memcpy(file_name, optarg, strlen(optarg));
+                break;
+            case 'b':
+                block_size_in_words = atoi(optarg);
+                break;
+            case 's':
+                number_of_sets = atoi(optarg);
+                break;
+            case 'a':
+                associativity = atoi(optarg);
+                break;
+            case '?':
+                printf("unknown option: `%c`\n", optopt);
+            default:
+                break;
+        }
+    }
+
+    /*
+    Enter the machine code program to simulate:
+    - file_name
+    Enter the block size of the cache (in words):
+    - block_size_in_words
+    Enter the number of sets in the cache:
+    - number_of_sets
+    Enter the associativity of the cache:
+    - associativity
+     */
+
+    while(strlen(file_name) == 0){
+        printf("Enter the name of the machine code file to simulate:\n");
+        fgets(file_name, 100, stdin);
+        file_name[strlen(file_name)-1] = '\0'; // gobble up the \n with a \0
+    }
+    while(block_size_in_words == -1){
+        printf("Enter the block size of the cache (in words):\n");
+        scanf("%d",&block_size_in_words);
+    }
+    while(number_of_sets == -1){
+        printf("Enter the number of sets in the cache:\n");
+        scanf("%d",&number_of_sets);
+    }
+    while(associativity == -1){
+        printf("Enter the associativity of the cache:\n");
+        scanf("%d",&associativity);
+    }
+
+    printf("Inputs: %s, %d, %d, %d\n", file_name, block_size_in_words, number_of_sets, associativity);
+
+    /*
 	if(argc == 1){
-		fname = (char*)malloc(sizeof(char)*100);
+		file_name = (char*)malloc(sizeof(char)*100);
 		printf("Enter the name of the machine code file to simulate: ");
-		fgets(fname, 100, stdin);
-		fname[strlen(fname)-1] = '\0'; // gobble up the \n with a \0
+		fgets(file_name, 100, stdin);
+		file_name[strlen(file_name)-1] = '\0'; // gobble up the \n with a \0
 	}
 	else if (argc == 2){
 
 		int strsize = strlen(argv[1]);
 
-		fname = (char*)malloc(strsize);
-		fname[0] = '\0';
+		file_name = (char*)malloc(strsize);
+		file_name[0] = '\0';
 
-		strcat(fname, argv[1]);
+		strcat(file_name, argv[1]);
 	}else{
 		printf("Please run this program correctly\n");
 		exit(-1);
 	}
 
-	FILE *fp = fopen(fname, "r");
+	FILE *fp = fopen(file_name, "r");
 	if (fp == NULL) {
-		printf("Cannot open file '%s' : %s\n", fname, strerror(errno));
+		printf("Cannot open file '%s' : %s\n", file_name, strerror(errno));
 		return -1;
 	}
 
-	/* count the number of lines by counting newline characters */
+	// count the number of lines by counting newline characters
 	int line_count = 0;
 	int c;
 	while (EOF != (c=getc(fp))) {
@@ -214,17 +278,17 @@ int main(int argc, char** argv){
 
 	int i = 0;
 	while (fgets(line, sizeof(line), fp)) {
-		/* note that fgets doesn't strip the terminating \n, checking its
-		   presence would allow to handle lines longer that sizeof(line) */
+		//note that fgets doesn't strip the terminating \n, checking its
+        // presence would allow to handle lines longer that sizeof(line)
 		state->mem[i] = atoi(line);
 		i++;
 	}
 	fclose(fp);
 
-	/** Run the simulation **/
+	// Run the simulation
 	run(state);
 
 	free(state);
-	free(fname);
-
+	free(file_name);
+    */
 }
