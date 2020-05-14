@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <math.h>
 
 #define NUMMEMORY 65536 /* maximum number of data words in memory */
 #define NUMREGS 8 /* number of machine registers */
@@ -120,9 +121,27 @@ typedef struct cachestruct {
     settype** sets;
 } cachetype;
 
-int cacheOperation(int address, cachetype* cache){
-    // Holds valid, tag, and data
-    // And which is LRU
+int cache_operation(cachetype* cache, statetype* state){
+    // figure out what set we are in
+    // then search set for that tag
+    int address = state->pc;
+    // set bits
+    // celi(log2( # sets ))
+    int number_of_offset_bits = ceil( log(cache->block_size_in_words) / log(2) );
+    int number_of_set_bits = ceil( log(cache->number_of_sets) / log(2) );
+    int number_of_tag_bits = 32 - number_of_offset_bits - number_of_set_bits;
+
+    printf("Offset: %d, set: %d, tag: %d", number_of_offset_bits, number_of_set_bits, number_of_tag_bits);
+
+//    int set = address % cache->number_of_sets;
+//    int tag = cache->number_of_sets;
+//    int offset = 1;
+//
+//    for(int i=0; i<cache->associativity; i++){
+//        int way_tag = cache->sets[set]->ways[i]->tag;
+//
+//    }
+
 
 
     return 1;
@@ -155,7 +174,7 @@ void run(statetype* state, cachetype* cache){
 		// Fetch from cache
 		// Fetch is only time we actually reference memory
 
-		instr = state->mem[state->pc];
+		instr = cache_operation(cache, state);
 		// cache will need to check if tag exists within set
 		// call cache at state->pc
 		// it will pull state->mem[state->pc] into cache then return it
