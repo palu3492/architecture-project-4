@@ -165,13 +165,17 @@ void run(statetype* state){
 	// print_stats(total_instrs);
 }
 
+int is_power_of_two(int number) {
+    return (number & (number - 1)) == 0;
+}
+
 int main(int argc, char** argv){
 
     /** Get command line arguments **/
     char* file_name = (char*)malloc(sizeof(char)*100);
-    int block_size_in_words = -1;
-    int number_of_sets = -1;
-    int associativity = -1;
+    int block_size_in_words = 0;
+    int number_of_sets = 0;
+    int associativity = 0;
 
     int option;
     opterr = 0;
@@ -214,15 +218,15 @@ int main(int argc, char** argv){
         fgets(file_name, 100, stdin);
         file_name[strlen(file_name)-1] = '\0'; // gobble up the \n with a \0
     }
-    while(block_size_in_words == -1){
+    while(block_size_in_words < 1 || !is_power_of_two(block_size_in_words)){
         printf("Enter the block size of the cache (in words):\n");
         scanf("%d",&block_size_in_words);
     }
-    while(number_of_sets == -1){
+    while(number_of_sets < 1 || !is_power_of_two(number_of_sets)){
         printf("Enter the number of sets in the cache:\n");
         scanf("%d",&number_of_sets);
     }
-    while(associativity == -1){
+    while(associativity < 1 || !is_power_of_two(associativity)){
         printf("Enter the associativity of the cache:\n");
         scanf("%d",&associativity);
     }
