@@ -171,6 +171,25 @@ int find_way(int address, int set, int tag, cachetype* cache){
     return cache->sets[set]->lru;
 }
 
+int cache_load(cachetype* cache, statetype* state, int offset, int set, int tag, int address){
+    int way = find_way(address, set, tag, cache);
+    if(cache->sets[set]->ways[way]->dirty){
+        // write to memory first
+        print_action(address, cache->block_size_in_words, cache_to_memory);
+    }
+    if(cache->sets[set]->ways[way]->tag != tag){
+        print_action(address, cache->block_size_in_words, memory_to_cache);
+        int start_of_block = address;
+        memcpy(cache->sets[set]->ways[way]->data, state->mem + start_of_block, cache->block_size_in_words * sizeof(int));
+    }
+    cache->sets[set]->ways[way]->tag = tag;
+    cache->sets[set]->ways[way]->valid = 1;
+    cache->sets[set]->ways[way]->dirty = 0;
+    print_action(address, 1, cache_to_processor);
+
+    return cache->sets[set]->ways[way]->data[offset];
+}
+
 int cache_operation(cachetype* cache, statetype* state, int operation){
     // operations types:
     // 1 = fetch
@@ -201,18 +220,14 @@ int cache_operation(cachetype* cache, statetype* state, int operation){
         // 2.2 replace a cache way with this one
             // if dirty then write
 
-    int way = find_way(address, set, tag, cache);
-    if(cache->sets[set]->ways[way]->dirty){
-        // write to memory first
-        print_action(address, cache->block_size_in_words, cache_to_memory);
+    if(operation == 1){
+        return cache_load(cache, state, offset, set, tag, address);
     }
-    if(cache->sets[set]->ways[way]->tag != tag){
-        print_action(address, cache->block_size_in_words, memory_to_cache);
+
+    if(operation == 2){
+        return cache_load(cache, state, offset, set, tag, address);
     }
-    cache->sets[set]->ways[way]->tag = tag;
-    cache->sets[set]->ways[way]->valid = 1;
-    cache->sets[set]->ways[way]->dirty = 0;
-    print_action(address, 1, cache_to_processor);
+
 
 
 
@@ -249,30 +264,16 @@ void run(statetype* state, cachetype* cache){
 	int regB = 0;
 	int offset = 0;
 	int branchtarget = 0;
-//	int aluresult = 0;
+	int aluresult = 0;
 
 	// Primary loop
 	while(1){
 
-		// printstate(state);
-
-		// Instruction Fetch
-		// Fetch from cache
-		// Fetch is only time we actually reference memory
-
-		instr = cache_operation(cache, state, 1);
-        state->pc = state->pc+1;
-		instr = cache_operation(cache, state, 1);
-		state->pc = state->pc+1;
-		instr = cache_operation(cache, state, 1);
-		state->pc = state->pc+1;
+		// Fetch instruction from cache
 		instr = cache_operation(cache, state, 1);
 
-        break;
-		// cache will need to check if tag exists within set
-		// call cache at state->pc
-		// it will pull state->mem[state->pc] into cache then return it
-		// no data needs to actually be stored
+		printf("instr: %d\n", instr);
+		printf("opcode: %d\n", opcode(instr));
 
 		/* check for halt */
 		if (opcode(instr) == HALT) {
@@ -299,7 +300,7 @@ void run(statetype* state, cachetype* cache){
 		 *
 		 **/
         // Not sure we care about this anymore
-		 /*
+
 		// ADD
 		if(opcode(instr) == ADD){
 			// Add
@@ -337,14 +338,12 @@ void run(statetype* state, cachetype* cache){
 		else if(opcode(instr) == BEQ){
 			// Calculate condition
 			aluresult = (regA == regB);
-
 			// ZD
 			if(aluresult){
 				// branch
 				state->pc = branchtarget;
 			}
 		}
-		*/
 	} // While
 }
 
