@@ -103,6 +103,7 @@ typedef struct waystruct {
     int valid;
     int dirty;
     int tag;
+    int *data;
 } waytype;
 
 typedef struct setstruct {
@@ -125,49 +126,103 @@ typedef struct cachestruct {
     settype** sets;
 } cachetype;
 
-int cache_operation(cachetype* cache, statetype* state){
-    // figure out what set we are in
-    // then search set for that tag
-    int address = state->pc;
-    // set bits
-    // celi(log2( # sets ))
+unsigned int getOffset(unsigned int address, cachetype* cache){
+    unsigned int offset;
+    offset = address << (cache->number_of_set_bits + cache->number_of_tag_bits);
+    offset = offset >> (cache->number_of_set_bits + cache->number_of_tag_bits);
+    return offset;
+}
 
+unsigned int getSet(unsigned int address, cachetype* cache){
+    unsigned int set;
+    set = address << (cache->number_of_tag_bits);
+    set = set >> (cache->number_of_offset_bits + cache->number_of_tag_bits);
+    return set;
+}
 
-    int offset = 0;
-    int set = 0;
-    int tag = 1;
+unsigned int getTag(unsigned int address, cachetype* cache){
+    unsigned int tag;
+    tag = address >> (cache->number_of_offset_bits + cache->number_of_set_bits);
+    return tag;
+}
 
-    printf("address: %d\n", address);
-    printf("Offset: %d, set: %d, tag: %d\n", number_of_offset_bits, number_of_set_bits, number_of_tag_bits);
-    printf("tag: %d\n", tag);
-
-
-    int tag_found = 0;
-    // Look through all ways
+// returns way (block) in set where data will be
+int find_way(int address, int set, int tag, cachetype* cache){
+    // check if memory is already in cache
+    // Look through all ways in set
     for(int i=0; i<cache->associativity; i++){
         int way_tag = cache->sets[set]->ways[i]->tag;
-        int way_valid = cache->sets[set]->ways[i]->valid;
+        int way_valid = cache->sets[set]->ways[i]->valid; // data present or not
         if(way_valid && way_tag == tag){
             cache->sets[set]->ways[i]->tag = tag;
             cache->sets[set]->ways[i]->valid = 1;
-            tag_found = 1;
-            printf("hit\n");
+            return i;
         }
     }
     // If tag not found in set
     // try to place in open set way
-    if(!tag_found){
-        for(int i=0; i<cache->associativity; i++){
-            int way_tag = cache->sets[set]->ways[i]->tag;
-            int way_valid = cache->sets[set]->ways[i]->valid;
-            if(!way_valid){
-                cache->sets[set]->ways[i]->tag = tag;
-                cache->sets[set]->ways[i]->valid = 1;
-                tag_found = 1;
-                printf("placed in empty way\n");
-            }
+    for (int i = 0; i < cache->associativity; i++) {
+        int way_valid = cache->sets[set]->ways[i]->valid;
+        if (!way_valid) {
+            return i;
         }
     }
+    // no free ways, replace one
+    return cache->sets[set]->lru;
+}
+
+int cache_operation(cachetype* cache, statetype* state, int operation){
+    // operations types:
+    // 1 = fetch
+    // 2 = lw
+    // 3 = sw
+
+    unsigned int address = state->pc;
+
+    int offset = getOffset(address, cache);
+    int set = getSet(address, cache);
+    int tag = getTag(address, cache);
+
+
+    // FETCH
+
+    // get instruction from memory
+    // how to:
+    // 1. memory in cache so read it and return it
+    // 2. get memory from cache then read it and return it
+        // - put in empty way
+        // - replace LRU way
+        // - replace LRU way and write to memory because of dirty bit
+    // Check if memory already in cache
+
+    // 1. memory already in cache
+    // 2. memory not in cache
+        // 2.1 memory moved into free cache way
+        // 2.2 replace a cache way with this one
+            // if dirty then write
+
+    int way = find_way(address, set, tag, cache);
+    if(cache->sets[set]->ways[way]->dirty){
+        // write to memory first
+        print_action(address, cache->block_size_in_words, cache_to_memory);
+    }
+    if(cache->sets[set]->ways[way]->tag != tag){
+        print_action(address, cache->block_size_in_words, memory_to_cache);
+    }
+    cache->sets[set]->ways[way]->tag = tag;
+    cache->sets[set]->ways[way]->valid = 1;
+    cache->sets[set]->ways[way]->dirty = 0;
+    print_action(address, 1, cache_to_processor);
+
+
+
+
+//    printf("address: %d\n", address);
+//    printf("Offset: %d, set: %d, tag: %d\n", cache->number_of_offset_bits, cache->number_of_set_bits, cache->number_of_tag_bits);
+    printf("address: %d, offset: %d, set: %d, tag: %d\n", address, offset, set, tag);
+
+
+
     // still not found
     // replace a way
     // replace LRU
@@ -205,8 +260,14 @@ void run(statetype* state, cachetype* cache){
 		// Fetch from cache
 		// Fetch is only time we actually reference memory
 
-		instr = cache_operation(cache, state);
-		instr = cache_operation(cache, state);
+		instr = cache_operation(cache, state, 1);
+        state->pc = state->pc+1;
+		instr = cache_operation(cache, state, 1);
+		state->pc = state->pc+1;
+		instr = cache_operation(cache, state, 1);
+		state->pc = state->pc+1;
+		instr = cache_operation(cache, state, 1);
+
         break;
 		// cache will need to check if tag exists within set
 		// call cache at state->pc
@@ -215,7 +276,7 @@ void run(statetype* state, cachetype* cache){
 
 		/* check for halt */
 		if (opcode(instr) == HALT) {
-//			printf("machine halted\n");
+			// printf("machine halted\n");
 			break;
 		}
 
@@ -415,7 +476,9 @@ int main(int argc, char** argv){
             cache->sets[i]->ways[w] = (waytype*)malloc(sizeof(waytype));
             cache->sets[i]->ways[w]->dirty = 0;
             cache->sets[i]->ways[w]->valid = 0;
-            cache->sets[i]->ways[w]->tag = 0;
+            cache->sets[i]->ways[w]->tag = -1;
+            // holds way (block) data from memory
+            cache->sets[i]->ways[w]->data = (int*)malloc(sizeof(int) * block_size_in_words);
         }
     }
 
