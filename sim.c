@@ -95,12 +95,36 @@ cache simulator should return the data to the processor (for read accesses) or w
 /*
   The cache simulator keeps track of what blocks are currently in the cache and what state they are in (e.g. dirty, valid, etc.).
 */
-int cache(int block_size_in_words, int number_of_sets, int associativity){
+
+
+// Block in set is called a way
+typedef struct waystruct {
+    int valid;
+    int dirty;
+    int tag;
+} waytype;
+
+typedef struct setstruct {
+    waytype** ways;
+    int lru;
+} settype;
+
+typedef struct cachestruct {
+    // Each set will have its own LRU
+    // what blocks are in the cache and what state they are in
+    int block_size_in_words;
+    int number_of_sets;
+    int associativity;
+    int size;
+
+    settype** sets;
+} cachetype;
+
+int cacheOperation(int address, cachetype* cache){
     // Holds valid, tag, and data
     // And which is LRU
 
-    // the total number of words in the cache
-    int size = block_size_in_words * number_of_sets * associativity;
+
     return 1;
 }
 
@@ -112,13 +136,7 @@ int signextend(int num){
 	return num;
 }
 
-/*
-void print_stats(int n_instrs){
-	printf("INSTRUCTIONS: %d\n", n_instrs);
-}
-*/
-
-void run(statetype* state){
+void run(statetype* state, cachetype* cache){
 
 	// Reused variables;
 	int instr = 0;
@@ -126,22 +144,26 @@ void run(statetype* state){
 	int regB = 0;
 	int offset = 0;
 	int branchtarget = 0;
-	int aluresult = 0;
-
-	int total_instrs = 0;
+//	int aluresult = 0;
 
 	// Primary loop
 	while(1){
-		total_instrs++;
 
 		// printstate(state);
 
 		// Instruction Fetch
+		// Fetch from cache
+		// Fetch is only time we actually reference memory
+
 		instr = state->mem[state->pc];
+		// cache will need to check if tag exists within set
+		// call cache at state->pc
+		// it will pull state->mem[state->pc] into cache then return it
+		// no data needs to actually be stored
 
 		/* check for halt */
 		if (opcode(instr) == HALT) {
-			printf("machine halted\n");
+//			printf("machine halted\n");
 			break;
 		}
 
@@ -163,6 +185,8 @@ void run(statetype* state){
 		 * Action depends on instruction
 		 *
 		 **/
+        // Not sure we care about this anymore
+		 /*
 		// ADD
 		if(opcode(instr) == ADD){
 			// Add
@@ -206,9 +230,9 @@ void run(statetype* state){
 				// branch
 				state->pc = branchtarget;
 			}
-		}	
+		}
+		*/
 	} // While
-	// print_stats(total_instrs);
 }
 
 int is_power_of_two(int number) {
@@ -316,8 +340,37 @@ int main(int argc, char** argv){
 	}
 	fclose(fp);
 
+	// Cache
+
+    cachetype* cache = (cachetype*)malloc(sizeof(cachetype));
+    cache->block_size_in_words = block_size_in_words;
+    cache->number_of_sets =  number_of_sets;
+    cache->associativity = associativity;
+    cache->size = block_size_in_words * number_of_sets * associativity;
+
+    cache->sets = (settype**)malloc(sizeof(settype*) * number_of_sets);
+    for(i=0; i<number_of_sets; i++){
+        cache->sets[i] = (settype*)malloc(sizeof(settype));
+        cache->sets[i]->lru = 0;
+        for(int w=0; w<associativity; w++){
+            cache->sets[i]->ways = (waytype**)malloc(sizeof(waytype*) * associativity);
+            cache->sets[i]->ways[w] = (waytype*)malloc(sizeof(waytype));
+            cache->sets[i]->ways[w]->dirty = 0;
+            cache->sets[i]->ways[w]->valid = 0;
+            cache->sets[i]->ways[w]->tag = 0;
+        }
+    }
+
+//    for(i=0; i<number_of_sets; i++){
+//        for(int w=0; w<associativity; w++){
+//            printf("\nDirty: %d\n", cache->sets[i]->ways[w]->tag);
+//        }
+//    }
+
+
+
 	// Run the simulation
-	// run(state);
+	 run(state, cache);
 
 	free(state);
 	free(file_name);
