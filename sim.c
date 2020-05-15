@@ -105,6 +105,7 @@ typedef struct waystruct {
     int tag;
     int *data;
     int last_used;
+    int address;
 } waytype;
 
 typedef struct setstruct {
@@ -187,20 +188,23 @@ int find_way(int address, int set, int tag, cachetype* cache){
 }
 
 void load_way(cachetype* cache, statetype* state, int way, int set, int tag, int address){
-    int start_of_block = (address / cache->block_size_in_words) * cache->block_size_in_words; // integer division
+
     if(!cache->sets[set]->ways[way]->valid || cache->sets[set]->ways[way]->tag != tag){
         // write to cache to memory first
         if(cache->sets[set]->ways[way]->dirty){
             // Write cache way to memory
-            memcpy(state->mem + start_of_block, cache->sets[set]->ways[way]->data, cache->block_size_in_words * sizeof(int));
-            print_action(start_of_block, cache->block_size_in_words, cache_to_memory);
+            memcpy(state->mem + cache->sets[set]->ways[way]->address, cache->sets[set]->ways[way]->data, cache->block_size_in_words * sizeof(int));
+            print_action(cache->sets[set]->ways[way]->address, cache->block_size_in_words, cache_to_memory);
         } else if(cache->sets[set]->ways[way]->valid){
-            print_action(start_of_block, cache->block_size_in_words, cache_to_nowhere);
+            print_action(cache->sets[set]->ways[way]->address, cache->block_size_in_words, cache_to_nowhere);
         }
+
+        int start_of_block = (address / cache->block_size_in_words) * cache->block_size_in_words; // integer division
         // whatever is here needs to be thrown
         print_action(start_of_block, cache->block_size_in_words, memory_to_cache);
         // write memory to cache
         memcpy(cache->sets[set]->ways[way]->data, state->mem + start_of_block, cache->block_size_in_words * sizeof(int));
+        cache->sets[set]->ways[way]->address = start_of_block;
     }
 }
 
