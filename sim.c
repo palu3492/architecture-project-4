@@ -104,6 +104,7 @@ typedef struct waystruct {
     int dirty;
     int tag;
     int *data;
+    int last_used;
 } waytype;
 
 typedef struct setstruct {
@@ -146,6 +147,19 @@ unsigned int get_tag(unsigned int address, cachetype* cache){
     return tag;
 }
 
+int find_lru(cachetype* cache, int set){
+    int lru = 0;
+    int highest = 0;
+    for(int i=0; i<cache->associativity; i++){
+        int last_used = cache->sets[set]->ways[i]->last_used;
+        if(last_used > highest){
+            highest = last_used;
+            lru = i;
+        }
+    }
+    return lru;
+}
+
 // returns way (block) in set where data will be
 int find_way(int address, int set, int tag, cachetype* cache){
     // check if memory is already in cache
@@ -168,7 +182,8 @@ int find_way(int address, int set, int tag, cachetype* cache){
         }
     }
     // no free ways, replace one
-    return cache->sets[set]->lru;
+    // return cache->sets[set]->lru;
+    return find_lru(cache, set);
 }
 
 int cache_load_block(cachetype* cache, statetype* state, int offset, int set, int tag, int address){
@@ -177,6 +192,8 @@ int cache_load_block(cachetype* cache, statetype* state, int offset, int set, in
     if(cache->sets[set]->ways[way]->dirty){
         // write to memory first
         print_action(start_of_block, cache->block_size_in_words, cache_to_memory);
+        // Write cache way to memory
+        memcpy(state->mem + start_of_block, cache->sets[set]->ways[way]->data, cache->block_size_in_words * sizeof(int));
     }
     if(cache->sets[set]->ways[way]->tag != tag){
         print_action(start_of_block, cache->block_size_in_words, memory_to_cache);
@@ -190,22 +207,26 @@ int cache_load_block(cachetype* cache, statetype* state, int offset, int set, in
     return cache->sets[set]->ways[way]->data[offset];
 }
 
-void cache_write_block(cachetype* cache, statetype* state, int offset, int set, int tag, int destination, int source){
-//    int way = find_way(address, set, tag, cache);
-//    if(cache->sets[set]->ways[way]->dirty){
-//        // write to memory first
-//        print_action(address, cache->block_size_in_words, cache_to_memory);
-//    }
-//    if(cache->sets[set]->ways[way]->tag != tag){
-//        print_action(address, cache->block_size_in_words, memory_to_cache);
-//        int start_of_block = (address / cache->block_size_in_words) * cache->block_size_in_words; // integer division
-//        memcpy(cache->sets[set]->ways[way]->data, state->mem + start_of_block, cache->block_size_in_words * sizeof(int));
-//    }
-//    cache->sets[set]->ways[way]->tag = tag;
-//    cache->sets[set]->ways[way]->valid = 1;
-//    cache->sets[set]->ways[way]->dirty = 0;
-//    print_action(address, 1, cache_to_processor);
-
+void cache_write_block(cachetype* cache, statetype* state, int offset, int set, int tag, int destination, int *source){
+    int way = find_way(destination, set, tag, cache);
+    int start_of_block = (destination / cache->block_size_in_words) * cache->block_size_in_words; // integer division
+    if(cache->sets[set]->ways[way]->dirty){
+        // write to memory first
+        print_action(start_of_block, cache->block_size_in_words, cache_to_memory);
+        // Write cache way to memory
+        memcpy(state->mem + start_of_block, cache->sets[set]->ways[way]->data, cache->block_size_in_words * sizeof(int));
+    }
+    if(cache->sets[set]->ways[way]->tag != tag){
+        print_action(start_of_block, cache->block_size_in_words, memory_to_cache);
+        // write memory to cache
+        memcpy(cache->sets[set]->ways[way]->data, state->mem + start_of_block, cache->block_size_in_words * sizeof(int));
+    }
+    // write processor data to cache
+    print_action(destination, 1, processor_to_cache);
+    memcpy(cache->sets[set]->ways[way]->data + offset, source, sizeof(int));
+    cache->sets[set]->ways[way]->tag = tag;
+    cache->sets[set]->ways[way]->valid = 1;
+    cache->sets[set]->ways[way]->dirty = 1;
 }
 
 int cache_read(cachetype* cache, statetype* state, int address){
@@ -221,7 +242,7 @@ int cache_read(cachetype* cache, statetype* state, int address){
     // 2.1 memory moved into free cache way
     // 2.2 replace a cache way with this one
         // if dirty then write
-void cache_write(cachetype* cache, statetype* state, int destination, int source){
+void cache_write(cachetype* cache, statetype* state, int destination, int *source){
     int offset = get_offset(destination, cache);
     int set = get_set(destination, cache);
     int tag = get_tag(destination, cache);
@@ -306,7 +327,7 @@ void run(statetype* state, cachetype* cache){
 			}else if(opcode(instr) == SW){
 				// Store
 				// state->mem[aluresult] = regA;
-                cache_write(cache, state, aluresult, regA);
+                cache_write(cache, state, aluresult, &regA);
 			}
 		}
 		// JALR
