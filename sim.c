@@ -67,23 +67,6 @@ void print_action(int address, int size, enum action_type type) {
 }
 
 /*
-void printstate(statetype *stateptr){
-	int i;
-	printf("\n@@@\nstate:\n");
-	printf("\tpc %d\n", stateptr->pc);
-	printf("\tmemory:\n");
-	for(i = 0; i < stateptr->nummemory; i++){
-		printf("\t\tmem[%d]=%d\n", i, stateptr->mem[i]);
-	}	
-	printf("\tregisters:\n");
-	for(i = 0; i < NUMREGS; i++){
-		printf("\t\treg[%d]=%d\n", i, stateptr->reg[i]);
-	}
-	printf("end state\n");
-}
-*/
-
-/*
 The three sources of address references are instruction fetch, lw, and sw.
 
 Each memory address reference should be passed to the cache simulator. The cache simulator keeps
@@ -99,23 +82,20 @@ cache simulator should return the data to the processor (for read accesses) or w
 
 
 // Block in set is called a way
-typedef struct waystruct {
+typedef struct entrystruct {
     int valid;
     int dirty;
     int tag;
     int *data;
     int last_used;
     int address;
-} waytype;
+} entrytype;
 
 typedef struct setstruct {
-    waytype** ways;
-    int lru;
+    entrytype** entries;
 } settype;
 
 typedef struct cachestruct {
-    // Each set will have its own LRU
-    // what blocks are in the cache and what state they are in
     int block_size_in_words;
     int number_of_sets;
     int associativity;
@@ -148,63 +128,69 @@ unsigned int get_tag(unsigned int address, cachetype* cache){
     return tag;
 }
 
+// Finds least recently used entry in a set
+// Looks at each set and finds one with lowest last used counter
+// Lowest last used will be entry that
 int find_lru(cachetype* cache, int set){
     int lru = 0;
-    int highest = 0;
-    for(int i=0; i<cache->associativity; i++){
-        int last_used = cache->sets[set]->ways[i]->last_used;
-        if(last_used > highest){
-            highest = last_used;
-            lru = i;
+    int lowest = 0;
+    for(int way = 0; way < cache->associativity; way++){
+        int last_used = cache->sets[set]->entries[way]->last_used;
+        if(last_used < lowest){
+            lowest = last_used;
+            lru = way;
         }
     }
-    return lru;
+    return 0;
 }
 
-// returns way (block) in set where data will be
-int find_way(int address, int set, int tag, cachetype* cache){
+// returns entry (way/index) in set where data will be
+// returns just the index where data will be, data may or may not be there currently
+int find_entry(int set, int tag, cachetype* cache){
     // check if memory is already in cache
-    // Look through all ways in set
-    for(int i=0; i<cache->associativity; i++){
-        int way_tag = cache->sets[set]->ways[i]->tag;
-        int way_valid = cache->sets[set]->ways[i]->valid; // data present or not
-        if(way_valid && way_tag == tag){
-            cache->sets[set]->ways[i]->tag = tag;
-            cache->sets[set]->ways[i]->valid = 1;
-            return i;
+    // Look through all entries in set
+    for(int way = 0; way < cache->associativity; way++){
+        int entry_tag = cache->sets[set]->entries[way]->tag;
+        int entry_valid = cache->sets[set]->entries[way]->valid; // data present or not
+        if(entry_valid && entry_tag == tag){
+            cache->sets[set]->entries[way]->tag = tag;
+            cache->sets[set]->entries[way]->valid = 1;
+            return way;
         }
     }
     // If tag not found in set
-    // try to place in open set way
+    // try to place in open set entry
     for (int i = 0; i < cache->associativity; i++) {
-        int way_valid = cache->sets[set]->ways[i]->valid;
-        if (!way_valid) {
+        int entry_valid = cache->sets[set]->entries[i]->valid;
+        if (!entry_valid) {
             return i;
         }
     }
-    // no free ways, replace one
-    // return cache->sets[set]->lru;
+    // no free entries, replace one
     return find_lru(cache, set);
 }
 
-void load_way(cachetype* cache, statetype* state, int way, int set, int tag, int address){
-
-    if(!cache->sets[set]->ways[way]->valid || cache->sets[set]->ways[way]->tag != tag){
-        // write to cache to memory first
-        if(cache->sets[set]->ways[way]->dirty){
-            // Write cache way to memory
-            memcpy(state->mem + cache->sets[set]->ways[way]->address, cache->sets[set]->ways[way]->data, cache->block_size_in_words * sizeof(int));
-            print_action(cache->sets[set]->ways[way]->address, cache->block_size_in_words, cache_to_memory);
-        } else if(cache->sets[set]->ways[way]->valid){
-            print_action(cache->sets[set]->ways[way]->address, cache->block_size_in_words, cache_to_nowhere);
+// Loads block of data into set entry
+// if entry already in cache then do nothing
+// If not then replace what's there with new entry
+// If whats there is dirty then write it to memory first
+void load_entry(cachetype* cache, statetype* state, int way, int set, int tag, int address){
+    if(!cache->sets[set]->entries[way]->valid || cache->sets[set]->entries[way]->tag != tag){
+        // write cache to memory first
+        if(cache->sets[set]->entries[way]->dirty){
+            // Write cache set entry block to memory
+            memcpy(state->mem + cache->sets[set]->entries[way]->address, cache->sets[set]->entries[way]->data, cache->block_size_in_words * sizeof(int));
+            print_action(cache->sets[set]->entries[way]->address, cache->block_size_in_words, cache_to_memory);
+        } else if(cache->sets[set]->entries[way]->valid){
+            // Clear cache set entry block
+            print_action(cache->sets[set]->entries[way]->address, cache->block_size_in_words, cache_to_nowhere);
         }
 
         int start_of_block = (address / cache->block_size_in_words) * cache->block_size_in_words; // integer division
-        // whatever is here needs to be thrown
         print_action(start_of_block, cache->block_size_in_words, memory_to_cache);
         // write memory to cache
-        memcpy(cache->sets[set]->ways[way]->data, state->mem + start_of_block, cache->block_size_in_words * sizeof(int));
-        cache->sets[set]->ways[way]->address = start_of_block;
+        memcpy(cache->sets[set]->entries[way]->data, state->mem + start_of_block, cache->block_size_in_words * sizeof(int));
+        cache->sets[set]->entries[way]->address = start_of_block;
     }
 }
 
@@ -213,36 +199,31 @@ int cache_read(cachetype* cache, statetype* state, int address){
     int set = get_set(address, cache);
     int tag = get_tag(address, cache);
 
-    int way = find_way(address, set, tag, cache);
-    load_way(cache, state, way, set, tag, address);
+    int way = find_entry(set, tag, cache);
+    load_entry(cache, state, way, set, tag, address);
 
-    cache->sets[set]->ways[way]->tag = tag;
-    cache->sets[set]->ways[way]->valid = 1;
-    cache->sets[set]->ways[way]->dirty = 0;
+    cache->sets[set]->entries[way]->tag = tag;
+    cache->sets[set]->entries[way]->valid = 1;
+    cache->sets[set]->entries[way]->dirty = 0;
     print_action(address, 1, cache_to_processor);
 
-    return cache->sets[set]->ways[way]->data[offset];
+    return cache->sets[set]->entries[way]->data[offset];
 }
 
-// 1. memory already in cache
-// 2. memory not in cache
-    // 2.1 memory moved into free cache way
-    // 2.2 replace a cache way with this one
-        // if dirty then write
 void cache_write(cachetype* cache, statetype* state, int destination, int *source){
     int offset = get_offset(destination, cache);
     int set = get_set(destination, cache);
     int tag = get_tag(destination, cache);
 
-    int way = find_way(destination, set, tag, cache);
-    load_way(cache, state, way, set, tag, destination);
+    int way = find_entry(set, tag, cache);
+    load_entry(cache, state, way, set, tag, destination);
 
-    cache->sets[set]->ways[way]->tag = tag;
-    cache->sets[set]->ways[way]->valid = 1;
-    cache->sets[set]->ways[way]->dirty = 1;
+    cache->sets[set]->entries[way]->tag = tag;
+    cache->sets[set]->entries[way]->valid = 1;
+    cache->sets[set]->entries[way]->dirty = 1;
     // write processor data to cache
     print_action(destination, 1, processor_to_cache);
-    memcpy(cache->sets[set]->ways[way]->data + offset, source, sizeof(int));
+    memcpy(cache->sets[set]->entries[way]->data + offset, source, sizeof(int));
 }
 
 int signextend(int num){
@@ -264,19 +245,13 @@ void run(statetype* state, cachetype* cache){
 	int aluresult = 0;
 
 	// Primary loop
-	int i = 0;
-	while(i<7){
-        i++;
+	while(1){
 
 		// Fetch instruction from cache
 		instr = cache_read(cache, state, state->pc);
 
-		// printf("instr: %d\n", instr);
-		// printf("opcode: %d\n", opcode(instr));
-
 		/* check for halt */
 		if (opcode(instr) == HALT) {
-			// printf("machine halted\n");
 			break;
 		}
 
@@ -452,8 +427,10 @@ int main(int argc, char** argv){
 	}
 	fclose(fp);
 
-	// Cache
 
+	/*
+	 * Cache
+	 */
     cachetype* cache = (cachetype*)malloc(sizeof(cachetype));
     cache->block_size_in_words = block_size_in_words;
     cache->number_of_sets =  number_of_sets;
@@ -467,31 +444,26 @@ int main(int argc, char** argv){
     cache->number_of_tag_bits = number_of_tag_bits;
 
     cache->sets = (settype**)malloc(sizeof(settype*) * number_of_sets);
-    for(i=0; i<number_of_sets; i++){
+    for(i = 0; i < number_of_sets; i++){
         cache->sets[i] = (settype*)malloc(sizeof(settype));
-        cache->sets[i]->lru = 0;
-        for(int w=0; w<associativity; w++){
-            cache->sets[i]->ways = (waytype**)malloc(sizeof(waytype*) * associativity);
-            cache->sets[i]->ways[w] = (waytype*)malloc(sizeof(waytype));
-            cache->sets[i]->ways[w]->dirty = 0;
-            cache->sets[i]->ways[w]->valid = 0;
-            cache->sets[i]->ways[w]->tag = 0;
+        cache->sets[i]->entries = (entrytype**)malloc(sizeof(entrytype*) * associativity);
+        for(int w = 0; w < associativity; w++){
+            cache->sets[i]->entries[w] = (entrytype*)malloc(sizeof(entrytype));
+            cache->sets[i]->entries[w]->dirty = 0;
+            cache->sets[i]->entries[w]->valid = 0;
+            cache->sets[i]->entries[w]->tag = 0;
+            cache->sets[i]->entries[w]->last_used = 0;
             // holds way (block) data from memory
-            cache->sets[i]->ways[w]->data = (int*)malloc(sizeof(int) * block_size_in_words);
+            cache->sets[i]->entries[w]->data = (int*)malloc(sizeof(int) * block_size_in_words);
         }
     }
 
-//    for(i=0; i<number_of_sets; i++){
-//        for(int w=0; w<associativity; w++){
-//            printf("\nDirty: %d\n", cache->sets[i]->ways[w]->tag);
-//        }
-//    }
-
-
-
 	// Run the simulation
-	 run(state, cache);
+    run(state, cache);
 
+    free(cache);
 	free(state);
 	free(file_name);
+
+	return 1;
 }
