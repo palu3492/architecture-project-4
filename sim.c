@@ -128,20 +128,26 @@ unsigned int get_tag(unsigned int address, cachetype* cache){
     return tag;
 }
 
+void increment_entries_lru(cachetype* cache, int set){
+    for(int way = 0; way < cache->associativity; way++){
+        cache->sets[set]->entries[way]->last_used++;
+    }
+}
+
 // Finds least recently used entry in a set
 // Looks at each set and finds one with lowest last used counter
 // Lowest last used will be entry that
 int find_lru(cachetype* cache, int set){
     int lru = 0;
-    int lowest = 0;
+    int highest = 0;
     for(int way = 0; way < cache->associativity; way++){
         int last_used = cache->sets[set]->entries[way]->last_used;
-        if(last_used < lowest){
-            lowest = last_used;
+        if(last_used > highest){
+            highest = last_used;
             lru = way;
         }
     }
-    return 0;
+    return lru;
 }
 
 // returns entry (way/index) in set where data will be
@@ -170,6 +176,20 @@ int find_entry(int set, int tag, cachetype* cache){
     return find_lru(cache, set);
 }
 
+void write_dirty_entries(cachetype* cache, statetype* state){
+    // Loop over all entries in each set and write any entries to memory that are dirty
+    for(int set = 0; set < cache->number_of_sets; set++) {
+        for (int way = 0; way < cache->associativity; way++) {
+            if (cache->sets[set]->entries[way]->dirty) {
+                // Write cache set entry block to memory
+                memcpy(state->mem + cache->sets[set]->entries[way]->address, cache->sets[set]->entries[way]->data,
+                       cache->block_size_in_words * sizeof(int));
+                print_action(cache->sets[set]->entries[way]->address, cache->block_size_in_words, cache_to_memory);
+            }
+        }
+    }
+}
+
 // Loads block of data into set entry
 // if entry already in cache then do nothing
 // If not then replace what's there with new entry
@@ -181,6 +201,7 @@ void load_entry(cachetype* cache, statetype* state, int way, int set, int tag, i
             // Write cache set entry block to memory
             memcpy(state->mem + cache->sets[set]->entries[way]->address, cache->sets[set]->entries[way]->data, cache->block_size_in_words * sizeof(int));
             print_action(cache->sets[set]->entries[way]->address, cache->block_size_in_words, cache_to_memory);
+            cache->sets[set]->entries[way]->dirty = 0;
         } else if(cache->sets[set]->entries[way]->valid){
             // Clear cache set entry block
             print_action(cache->sets[set]->entries[way]->address, cache->block_size_in_words, cache_to_nowhere);
@@ -199,12 +220,13 @@ int cache_read(cachetype* cache, statetype* state, int address){
     int set = get_set(address, cache);
     int tag = get_tag(address, cache);
 
+    increment_entries_lru(cache, set);
     int way = find_entry(set, tag, cache);
     load_entry(cache, state, way, set, tag, address);
+    cache->sets[set]->entries[way]->last_used = 0;
 
     cache->sets[set]->entries[way]->tag = tag;
     cache->sets[set]->entries[way]->valid = 1;
-    cache->sets[set]->entries[way]->dirty = 0;
     print_action(address, 1, cache_to_processor);
 
     return cache->sets[set]->entries[way]->data[offset];
@@ -215,8 +237,10 @@ void cache_write(cachetype* cache, statetype* state, int destination, int *sourc
     int set = get_set(destination, cache);
     int tag = get_tag(destination, cache);
 
+    increment_entries_lru(cache, set);
     int way = find_entry(set, tag, cache);
     load_entry(cache, state, way, set, tag, destination);
+    cache->sets[set]->entries[way]->last_used = 0;
 
     cache->sets[set]->entries[way]->tag = tag;
     cache->sets[set]->entries[way]->valid = 1;
@@ -252,6 +276,7 @@ void run(statetype* state, cachetype* cache){
 
 		/* check for halt */
 		if (opcode(instr) == HALT) {
+            write_dirty_entries(cache, state);
 			break;
 		}
 
