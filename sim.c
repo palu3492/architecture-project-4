@@ -186,47 +186,22 @@ int find_way(int address, int set, int tag, cachetype* cache){
     return find_lru(cache, set);
 }
 
-int cache_load_block(cachetype* cache, statetype* state, int offset, int set, int tag, int address){
-    int way = find_way(address, set, tag, cache);
+void load_way(cachetype* cache, statetype* state, int way, int set, int tag, int address){
     int start_of_block = (address / cache->block_size_in_words) * cache->block_size_in_words; // integer division
-    if(cache->sets[set]->ways[way]->dirty){
-        // write to memory first
-        print_action(start_of_block, cache->block_size_in_words, cache_to_memory);
-        // Write cache way to memory
-        memcpy(state->mem + start_of_block, cache->sets[set]->ways[way]->data, cache->block_size_in_words * sizeof(int));
-    }
-    if(cache->sets[set]->ways[way]->tag != tag){
-        print_action(start_of_block, cache->block_size_in_words, memory_to_cache);
-        memcpy(cache->sets[set]->ways[way]->data, state->mem + start_of_block, cache->block_size_in_words * sizeof(int));
-    }
-    cache->sets[set]->ways[way]->tag = tag;
-    cache->sets[set]->ways[way]->valid = 1;
-    cache->sets[set]->ways[way]->dirty = 0;
-    print_action(address, 1, cache_to_processor);
-
-    return cache->sets[set]->ways[way]->data[offset];
-}
-
-void cache_write_block(cachetype* cache, statetype* state, int offset, int set, int tag, int destination, int *source){
-    int way = find_way(destination, set, tag, cache);
-    int start_of_block = (destination / cache->block_size_in_words) * cache->block_size_in_words; // integer division
-    if(cache->sets[set]->ways[way]->dirty){
-        // write to memory first
-        print_action(start_of_block, cache->block_size_in_words, cache_to_memory);
-        // Write cache way to memory
-        memcpy(state->mem + start_of_block, cache->sets[set]->ways[way]->data, cache->block_size_in_words * sizeof(int));
-    }
-    if(cache->sets[set]->ways[way]->tag != tag){
+    if(!cache->sets[set]->ways[way]->valid || cache->sets[set]->ways[way]->tag != tag){
+        // write to cache to memory first
+        if(cache->sets[set]->ways[way]->dirty){
+            // Write cache way to memory
+            memcpy(state->mem + start_of_block, cache->sets[set]->ways[way]->data, cache->block_size_in_words * sizeof(int));
+            print_action(start_of_block, cache->block_size_in_words, cache_to_memory);
+        } else if(cache->sets[set]->ways[way]->valid){
+            print_action(start_of_block, cache->block_size_in_words, cache_to_nowhere);
+        }
+        // whatever is here needs to be thrown
         print_action(start_of_block, cache->block_size_in_words, memory_to_cache);
         // write memory to cache
         memcpy(cache->sets[set]->ways[way]->data, state->mem + start_of_block, cache->block_size_in_words * sizeof(int));
     }
-    // write processor data to cache
-    print_action(destination, 1, processor_to_cache);
-    memcpy(cache->sets[set]->ways[way]->data + offset, source, sizeof(int));
-    cache->sets[set]->ways[way]->tag = tag;
-    cache->sets[set]->ways[way]->valid = 1;
-    cache->sets[set]->ways[way]->dirty = 1;
 }
 
 int cache_read(cachetype* cache, statetype* state, int address){
@@ -234,7 +209,15 @@ int cache_read(cachetype* cache, statetype* state, int address){
     int set = get_set(address, cache);
     int tag = get_tag(address, cache);
 
-    return cache_load_block(cache, state, offset, set, tag, address);
+    int way = find_way(address, set, tag, cache);
+    load_way(cache, state, way, set, tag, address);
+
+    cache->sets[set]->ways[way]->tag = tag;
+    cache->sets[set]->ways[way]->valid = 1;
+    cache->sets[set]->ways[way]->dirty = 0;
+    print_action(address, 1, cache_to_processor);
+
+    return cache->sets[set]->ways[way]->data[offset];
 }
 
 // 1. memory already in cache
@@ -247,7 +230,15 @@ void cache_write(cachetype* cache, statetype* state, int destination, int *sourc
     int set = get_set(destination, cache);
     int tag = get_tag(destination, cache);
 
-    cache_write_block(cache, state, offset, set, tag, destination, source);
+    int way = find_way(destination, set, tag, cache);
+    load_way(cache, state, way, set, tag, destination);
+
+    cache->sets[set]->ways[way]->tag = tag;
+    cache->sets[set]->ways[way]->valid = 1;
+    cache->sets[set]->ways[way]->dirty = 1;
+    // write processor data to cache
+    print_action(destination, 1, processor_to_cache);
+    memcpy(cache->sets[set]->ways[way]->data + offset, source, sizeof(int));
 }
 
 int signextend(int num){
@@ -269,7 +260,9 @@ void run(statetype* state, cachetype* cache){
 	int aluresult = 0;
 
 	// Primary loop
-	while(1){
+	int i = 0;
+	while(i<7){
+        i++;
 
 		// Fetch instruction from cache
 		instr = cache_read(cache, state, state->pc);
@@ -478,7 +471,7 @@ int main(int argc, char** argv){
             cache->sets[i]->ways[w] = (waytype*)malloc(sizeof(waytype));
             cache->sets[i]->ways[w]->dirty = 0;
             cache->sets[i]->ways[w]->valid = 0;
-            cache->sets[i]->ways[w]->tag = -1;
+            cache->sets[i]->ways[w]->tag = 0;
             // holds way (block) data from memory
             cache->sets[i]->ways[w]->data = (int*)malloc(sizeof(int) * block_size_in_words);
         }
