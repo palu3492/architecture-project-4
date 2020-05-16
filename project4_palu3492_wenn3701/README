@@ -2,21 +2,21 @@ cache_sim.c - the code for the cache simulator.
 
 Makefile - instructions for the 'make' command to make the simulator into a executable.
 
-/tests - assembly files for testing the cache simulator
+/tests - assembly files for testing the cache simulator.
  - test1.4.1.4.asm - load data from memory into cache entry when the entry does not exist in the cache yet.
  - test2.8.1.2.asm - fill all empty entries before trying to replace one.
- - test3.8.1.1.asm - get data from cache entry when a entry exists for that address, don't grab from memory
- - test4.16.4.1.asm - memory goes into cache at correct sets
- - test5.4.2.1.asm - when replacing an entry, if dirty, write to memory first
+ - test3.8.1.1.asm - get data from cache entry when a entry exists for that address, don't grab from memory.
+ - test4.16.4.1.asm - memory goes into cache at correct sets.
+ - test5.4.2.1.asm - when replacing an entry, if dirty, write to memory first.
  - test6.16.4.1.asm - correct block is grabbed from memory when loading an address.
  - test7.8.4.2.asm - pull data from memory before writing to cache if no entry for that data exists in cache.
  - test8.8.4.1.asm - write into cache entry if entry already exists in cache.
  - test9.4.1.1.asm - dirty bit is flipped on write.
  - test10.4.2.1.asm - at end of program, write all dirty entries to memory.
  - test11.100.1.1.asm - only load from memory once because of large block size.
- - test12.8.1.2.asm - replace least recently used entry
- - test13.4.2.1.asm - loop and do many lw and sw instructions to make sure nothing breaks
- - test14.4.2.1.asm - write over an instruction should break simulator
+ - test12.8.1.2.asm - replace least recently used entry.
+ - test13.4.2.1.asm - loop and do many lw and sw instructions to make sure nothing breaks.
+ - test14.4.2.1.asm - write over an instruction should break simulator.
 
 
  overview.pdf - overview file that explains how the cache simulator works, any difficulties and any shortcomings.

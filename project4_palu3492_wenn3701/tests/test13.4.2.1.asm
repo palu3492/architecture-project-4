@@ -9,7 +9,7 @@ start add 3 1 3 # var ++
  beq 2 3 end # if equal limit then end
  beq 0 0 start # go back to the beginning of the loop
 end halt
-limit .fill 10
+limit .fill 5
 one .fill 1
 zero .fill 0
 value .fill 99 # random value to load and store
