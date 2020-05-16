@@ -4,4 +4,4 @@ project(architecture_project_4 C)
 set(CMAKE_C_STANDARD 11)
 
 add_executable(architecture_project_4
-    sim.c)
+        cache_sim.c)

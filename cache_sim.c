@@ -66,21 +66,6 @@ void print_action(int address, int size, enum action_type type) {
     }
 }
 
-/*
-The three sources of address references are instruction fetch, lw, and sw.
-
-Each memory address reference should be passed to the cache simulator. The cache simulator keeps
-track of what blocks are currently in the cache and what state they are in (e.g. dirty, valid, etc.). To
-service the address reference, the cache simulator may need to write back a dirty cache block to
-memory, then it may need to read a block into the cache from memory. After these possible steps, the
-cache simulator should return the data to the processor (for read accesses) or write the data to the cache
-(for write accesses). Each of these data transfers will be logged by calling the print_action function.
- */
-/*
-  The cache simulator keeps track of what blocks are currently in the cache and what state they are in (e.g. dirty, valid, etc.).
-*/
-
-
 // Block in set is called a way
 typedef struct entrystruct {
     int valid;
@@ -116,6 +101,9 @@ unsigned int get_offset(unsigned int address, cachetype* cache){
 }
 
 unsigned int get_set(unsigned int address, cachetype* cache){
+    if(cache->number_of_sets == 1){
+        return 0;
+    }
     unsigned int set;
     set = address << (cache->number_of_tag_bits);
     set = set >> (cache->number_of_offset_bits + cache->number_of_tag_bits);
@@ -130,7 +118,9 @@ unsigned int get_tag(unsigned int address, cachetype* cache){
 
 void increment_entries_lru(cachetype* cache, int set){
     for(int way = 0; way < cache->associativity; way++){
-        cache->sets[set]->entries[way]->last_used++;
+        if(cache->sets[set]->entries[way]->valid){
+            cache->sets[set]->entries[way]->last_used++;
+        }
     }
 }
 
@@ -155,6 +145,7 @@ int find_lru(cachetype* cache, int set){
 int find_entry(int set, int tag, cachetype* cache){
     // check if memory is already in cache
     // Look through all entries in set
+//    printf("set: %d, tag: %d\n", set, tag);
     for(int way = 0; way < cache->associativity; way++){
         int entry_tag = cache->sets[set]->entries[way]->tag;
         int entry_valid = cache->sets[set]->entries[way]->valid; // data present or not
@@ -219,18 +210,25 @@ void load_entry(cachetype* cache, statetype* state, int way, int set, int tag, i
 }
 
 int cache_read(cachetype* cache, statetype* state, int address){
+//    printf("address: %d\n", address);
     int offset = get_offset(address, cache);
     int set = get_set(address, cache);
     int tag = get_tag(address, cache);
+//    printf("offset: %d\n", offset);
+//    printf("set: %d\n", set);
+//    printf("tag: %d\n", tag);
+//    printf("set: %d, tag: %d\n", set, tag);
 
     increment_entries_lru(cache, set);
     int way = find_entry(set, tag, cache);
+//    printf("way: %d\n", way);
     load_entry(cache, state, way, set, tag, address);
     cache->sets[set]->entries[way]->last_used = 0;
 
     // Read specific
     cache->sets[set]->entries[way]->tag = tag;
     cache->sets[set]->entries[way]->valid = 1;
+
     print_action(address, 1, cache_to_processor);
 
     return cache->sets[set]->entries[way]->data[offset];
@@ -409,13 +407,21 @@ int main(int argc, char** argv){
         printf("Enter the block size of the cache (in words):\n");
         scanf("%d",&block_size_in_words);
     }
-    while(number_of_sets < 1 || !is_power_of_two(number_of_sets)){
-        printf("Enter the number of sets in the cache:\n");
-        scanf("%d",&number_of_sets);
-    }
-    while(associativity < 1 || !is_power_of_two(associativity)){
-        printf("Enter the associativity of the cache:\n");
-        scanf("%d",&associativity);
+    while(1){
+        while(number_of_sets < 1 || !is_power_of_two(number_of_sets)){
+            printf("Enter the number of sets in the cache:\n");
+            scanf("%d",&number_of_sets);
+        }
+        while(associativity < 1 || !is_power_of_two(associativity)){
+            printf("Enter the associativity of the cache:\n");
+            scanf("%d",&associativity);
+        }
+        if(number_of_sets * associativity > 256){
+            number_of_sets = 0;
+            associativity = 0;
+        } else {
+            break;
+        }
     }
 
     // printf("Inputs: %s, %d, %d, %d\n", file_name, block_size_in_words, number_of_sets, associativity);
@@ -466,8 +472,18 @@ int main(int argc, char** argv){
     cache->number_of_sets =  number_of_sets;
     cache->associativity = associativity;
     cache->size = block_size_in_words * number_of_sets * associativity;
-    int number_of_offset_bits = ceil( log(cache->block_size_in_words) / log(2) );
-    int number_of_set_bits = ceil( log(cache->number_of_sets) / log(2) );
+    int number_of_offset_bits = ceil( log(block_size_in_words) / log(2) );
+    int number_of_set_bits = ceil( log(number_of_sets) / log(2) );
+//    if(number_of_set_bits == 0){
+//        number_of_set_bits = 1;
+//    }
+//    printf("number_of_set_bits: %d\n", number_of_set_bits);
+//    printf("number_of_offset_bits: %d\n", number_of_offset_bits);
+//    printf("number_of_sets: %d\n", number_of_sets);
+//    printf("log: %f\n", log(number_of_sets) );
+//    printf("log2: %f\n", log(number_of_sets) / log(2) );
+//    printf("number_of_set_bits: %d\n", number_of_set_bits);
+//    return 1;
     int number_of_tag_bits = 32 - number_of_offset_bits - number_of_set_bits;
     cache->number_of_offset_bits = number_of_offset_bits;
     cache->number_of_set_bits = number_of_set_bits;

@@ -1,10 +1,10 @@
 CC=gcc
 
-all: sim.o
-	$(CC) sim.o -o sim -lm
+all: cache_sim.o
+	$(CC) cache_sim.o -o cache_sim -lm
 	
-sim: sim.c
-	$(CC) sim.c -c sim.o -lm
+sim: cache_sim.c
+	$(CC) cache_sim.c -c cache_sim.o -lm
 	
 clean:
-	rm sim.o sim
+	rm cache_sim.o cache_sim

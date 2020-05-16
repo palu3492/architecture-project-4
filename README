@@ -3,7 +3,7 @@ cache_sim.c - the code for the cache simulator.
 Makefile - instructions for the 'make' command to make the simulator into a executable.
 
 /tests - assembly files for testing the cache simulator
- - test1.4.1.3.asm - load data from memory into cache entry when the entry does not exist in the cache yet.
+ - test1.4.1.4.asm - load data from memory into cache entry when the entry does not exist in the cache yet.
  - test2.8.1.2.asm - fill all empty entries before trying to replace one.
  - test3.8.1.1.asm - get data from cache entry when a entry exists for that address, don't grab from memory
  - test4.16.4.1.asm - memory goes into cache at correct sets
