@@ -176,7 +176,8 @@ int find_entry(int set, int tag, cachetype* cache){
     return find_lru(cache, set);
 }
 
-void write_dirty_entries(cachetype* cache, statetype* state){
+// When the program is halted write any dirty entries to memory and invalidate all entries
+void clean_up_cache(cachetype* cache, statetype* state){
     // Loop over all entries in each set and write any entries to memory that are dirty
     for(int set = 0; set < cache->number_of_sets; set++) {
         for (int way = 0; way < cache->associativity; way++) {
@@ -186,6 +187,8 @@ void write_dirty_entries(cachetype* cache, statetype* state){
                        cache->block_size_in_words * sizeof(int));
                 print_action(cache->sets[set]->entries[way]->address, cache->block_size_in_words, cache_to_memory);
             }
+            // invalidate all entries
+            cache->sets[set]->entries[way]->valid = 0;
         }
     }
 }
@@ -225,6 +228,7 @@ int cache_read(cachetype* cache, statetype* state, int address){
     load_entry(cache, state, way, set, tag, address);
     cache->sets[set]->entries[way]->last_used = 0;
 
+    // Read specific
     cache->sets[set]->entries[way]->tag = tag;
     cache->sets[set]->entries[way]->valid = 1;
     print_action(address, 1, cache_to_processor);
@@ -242,6 +246,7 @@ void cache_write(cachetype* cache, statetype* state, int destination, int *sourc
     load_entry(cache, state, way, set, tag, destination);
     cache->sets[set]->entries[way]->last_used = 0;
 
+    // Write specific
     cache->sets[set]->entries[way]->tag = tag;
     cache->sets[set]->entries[way]->valid = 1;
     cache->sets[set]->entries[way]->dirty = 1;
@@ -276,7 +281,7 @@ void run(statetype* state, cachetype* cache){
 
 		/* check for halt */
 		if (opcode(instr) == HALT) {
-            write_dirty_entries(cache, state);
+            clean_up_cache(cache, state);
 			break;
 		}
 
