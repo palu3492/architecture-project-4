@@ -145,7 +145,6 @@ int find_lru(cachetype* cache, int set){
 int find_entry(int set, int tag, cachetype* cache){
     // check if memory is already in cache
     // Look through all entries in set
-//    printf("set: %d, tag: %d\n", set, tag);
     for(int way = 0; way < cache->associativity; way++){
         int entry_tag = cache->sets[set]->entries[way]->tag;
         int entry_valid = cache->sets[set]->entries[way]->valid; // data present or not
@@ -210,18 +209,12 @@ void load_entry(cachetype* cache, statetype* state, int way, int set, int tag, i
 }
 
 int cache_read(cachetype* cache, statetype* state, int address){
-//    printf("address: %d\n", address);
     int offset = get_offset(address, cache);
     int set = get_set(address, cache);
     int tag = get_tag(address, cache);
-//    printf("offset: %d\n", offset);
-//    printf("set: %d\n", set);
-//    printf("tag: %d\n", tag);
-//    printf("set: %d, tag: %d\n", set, tag);
 
     increment_entries_lru(cache, set);
     int way = find_entry(set, tag, cache);
-//    printf("way: %d\n", way);
     load_entry(cache, state, way, set, tag, address);
     cache->sets[set]->entries[way]->last_used = 0;
 
@@ -474,16 +467,6 @@ int main(int argc, char** argv){
     cache->size = block_size_in_words * number_of_sets * associativity;
     int number_of_offset_bits = ceil( log(block_size_in_words) / log(2) );
     int number_of_set_bits = ceil( log(number_of_sets) / log(2) );
-//    if(number_of_set_bits == 0){
-//        number_of_set_bits = 1;
-//    }
-//    printf("number_of_set_bits: %d\n", number_of_set_bits);
-//    printf("number_of_offset_bits: %d\n", number_of_offset_bits);
-//    printf("number_of_sets: %d\n", number_of_sets);
-//    printf("log: %f\n", log(number_of_sets) );
-//    printf("log2: %f\n", log(number_of_sets) / log(2) );
-//    printf("number_of_set_bits: %d\n", number_of_set_bits);
-//    return 1;
     int number_of_tag_bits = 32 - number_of_offset_bits - number_of_set_bits;
     cache->number_of_offset_bits = number_of_offset_bits;
     cache->number_of_set_bits = number_of_set_bits;
